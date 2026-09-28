@@ -1,34 +1,36 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"log"
+	"net/http"
 
+	"ai_chatbot_llama3.2_1B/handler"
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+
+	"github.com/go-chi/cors"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
 
+var client openai.Client
+
 func main() {
-	baseUrl := "http://localhost:12434/engines/llama.cpp/v1/"
+	client = openai.NewClient(
+		option.WithBaseURL("http://localhost:12434/engines/llama.cpp/v1/"),
+		option.WithAPIKey("not-needed"),
+	)
 
-	client := openai.NewClient(
-		option.WithBaseURL(baseUrl),
-		option.WithAPIKey("not-needed"))
+	r := chi.NewRouter()
+	r.Use(chimiddleware.Logger)
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{"http://localhost:5173"}, // our React dev server, added in Step 5
+		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders: []string{"Content-Type"},
+	}))
 
-	resp, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
-		Model: "ai/llama3.2:1B-Q8_0",
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			// openai.UserMessage("Hello, how are you?"),
-			// openai.UserMessage("Now, who is the president of the United States?"),
-			openai.UserMessage("Now, what is the latest Marvel movie?"),
-		},
-	})
+	r.Post("/chat", handler.ChatHandler(client))
 
-	if err != nil {
-		log.Fatalf("Failed to create chat completion: %v", err)
-	}
-
-	fmt.Println("Chat Response")
-	fmt.Println(resp.Choices[0].Message.Content)
+	log.Println("Backend running on :8080")
+	log.Fatal(http.ListenAndServe(":8080", r))
 }

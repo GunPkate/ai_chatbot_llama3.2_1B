@@ -40,7 +40,8 @@ func ChatHandler(client openai.Client) http.HandlerFunc {
 			if len(chunk.Choices) > 0 {
 				content := chunk.Choices[0].Delta.Content
 				if content != "" {
-					w.Write([]byte("data: " + content + "\n\n"))
+					payload, _ := json.Marshal(content)
+					w.Write([]byte("data: " + string(payload) + "\n\n"))
 					flusher.Flush()
 				}
 			}

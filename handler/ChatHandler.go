@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"ai_chatbot_llama3.2_1B/types"
+	types "ai_chatbot_llama3.2_1B/types/request"
 
 	"github.com/openai/openai-go"
 )
@@ -18,8 +18,6 @@ func ChatHandler(client openai.Client) http.HandlerFunc {
 			return
 		}
 
-		// Set headers for Server-Sent Events (SSE) — this is what lets us
-		// push chunks to the browser as they arrive, instead of one big response.
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
@@ -42,7 +40,6 @@ func ChatHandler(client openai.Client) http.HandlerFunc {
 			if len(chunk.Choices) > 0 {
 				content := chunk.Choices[0].Delta.Content
 				if content != "" {
-					// SSE format: each message starts with "data: " and ends with two newlines
 					w.Write([]byte("data: " + content + "\n\n"))
 					flusher.Flush()
 				}

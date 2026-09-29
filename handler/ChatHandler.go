@@ -4,15 +4,21 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
-	types "ai_chatbot_llama3.2_1B/types/request"
+	metrictypes "ai_chatbot_llama3.2_1B/types"
+	requesttypes "ai_chatbot_llama3.2_1B/types/request"
 
 	"github.com/openai/openai-go"
 )
 
-func ChatHandler(client openai.Client) http.HandlerFunc {
+func ChatHandler(client openai.Client, m *metrictypes.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.ChatRequest
+		var req requesttypes.ChatRequest
+		start := time.Now()
+		m.ChatsInFlight.Inc()
+		defer m.ChatsInFlight.Dec()
+		firstToken := true
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
@@ -27,6 +33,7 @@ func ChatHandler(client openai.Client) http.HandlerFunc {
 			http.Error(w, "streaming not supported", http.StatusInternalServerError)
 			return
 		}
+		_ = flusher
 
 		stream := client.Chat.Completions.NewStreaming(r.Context(), openai.ChatCompletionNewParams{
 			Model: "ai/llama3.2:1B-Q8_0",
@@ -38,12 +45,11 @@ func ChatHandler(client openai.Client) http.HandlerFunc {
 		for stream.Next() {
 			chunk := stream.Current()
 			if len(chunk.Choices) > 0 {
-				content := chunk.Choices[0].Delta.Content
-				if content != "" {
-					payload, _ := json.Marshal(content)
-					w.Write([]byte("data: " + string(payload) + "\n\n"))
-					flusher.Flush()
+				if firstToken {
+					m.TimeToFirstToken.Observe(time.Since(start).Seconds())
+					firstToken = false
 				}
+				m.TokensStreamed.Inc()
 			}
 		}
 		if err := stream.Err(); err != nil {

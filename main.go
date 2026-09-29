@@ -6,12 +6,14 @@ import (
 	"os"
 
 	"ai_chatbot_llama3.2_1B/handler"
+	"ai_chatbot_llama3.2_1B/metrics"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/go-chi/cors"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var client openai.Client
@@ -28,7 +30,9 @@ func main() {
 		option.WithAPIKey("not-needed"),
 	)
 
+	m := metrics.InitMetrics()
 	r := chi.NewRouter()
+	r.Use(metrics.MetricsMiddleware)
 	r.Use(chimiddleware.Logger)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173", "http://localhost:3000"},
@@ -36,7 +40,8 @@ func main() {
 		AllowedHeaders: []string{"Content-Type"},
 	}))
 
-	r.Post("/chat", handler.ChatHandler(client))
+	r.Post("/chat", handler.ChatHandler(client, m))
+	r.Handle("/metrics", promhttp.Handler())
 
 	log.Println("Backend running on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
